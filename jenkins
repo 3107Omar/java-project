@@ -1,0 +1,81 @@
+we will install jenkins server with specs ( 1 VM virtualbox, 1 CPU, 2G RAM, 10G HDD, network with bridged adaptor)
+
+## stop & disable firewalld
+## setenforce 0 
+
+1- install jenkins Long Term Support release
+
+sudo wget -O /etc/yum.repos.d/jenkins.repo \
+    https://pkg.jenkins.io/redhat-stable/jenkins.repo
+sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+sudo yum upgrade
+sudo yum install epel-release java-11-openjdk-devel
+sudo yum install jenkins
+sudo systemctl daemon-reload
+sudo systemctl start jenkins
+sudo systemctl status jenkins
+
+Browse to http://localhost:8080 (or whichever port you configured for Jenkins when installing it) and wait until the Unlock Jenkins page appears.
+From the Jenkins console log output, copy the automatically-generated alphanumeric password (between the 2 sets of asterisks)
+The command: sudo cat /var/lib/jenkins/secrets/initialAdminPassword will print the password at console.
+
+
+
+2- we install docker which is used by jenkins to build images
+
+sudo yum install -y yum-utils
+yum-config-manager \
+    --add-repo \
+    https://download.docker.com/linux/centos/docker-ce.repo
+sudo yum install docker-ce docker-ce-cli containerd.io
+sudo systemctl start docker
+sudo docker run hello-world ## used to test docker
+
+
+3- install git 
+
+sudo yum install -y git
+
+4- Whenever you trigger a Jenkins job, the Jenkins Kubernetes plugin will make an API call to create a Kubernetes agent pod.
+Then, the Jenkins agent pod gets deployed in the kubernetes with few environment variables containing the Jenkins server details and secrets.
+
+git clone https://github.com/scriptcamp/kubernetes-jenkins
+
+Step 1: Create a namespace called devops-tools
+
+kubectl create namespace devops-tools
+
+
+Step 2: Create a serviceAccount.yaml
+
+kubectl apply -f serviceAccount.yaml
+
+Jenkins server running Outside the Kubernetes cluster
+
+Step 1: Install Jenkins Kubernetes Plugin
+
+Go to Manage Jenkins –> Manage Plugins, search for Kubernetes Plugin in the available tab and install it.
+
+Step 2: Create a Kubernete Cloud Configuration
+
+Once installed, go to Manage Jenkins –> Manage Node & Clouds -> Click Configure Clouds -> “Add a new Cloud” select Kubernetes.
+-> Select Kubernetes Cloud Details 
+
+Step 3: Configure Jenkins Kubernetes Cloud
+
+1- Kubernetes URL: This is the Kubernete master API endpoint. If is it https enabled, use the https url.
+2- you can enable the “disable https"
+3- Credentials: For Jenkins to communitcate witih the Kubernetes cluster, we need a service account token with permissions to deploy pods in the devops-tools namespace.
+
+We have already created the service account in the devops-tools namespace. We need to get the token from the service account.
+Execute the following commands to retrieve the secret name from the service account.
+
+SECRET_NAME=$(kubectl get serviceaccount jenkins-admin  -o=jsonpath='{.secrets[0].name}' -n devops-tools)
+
+Now, we will use the SECRET_NAME to get the base64 encoded service account token and then decode it. You will get the token as output.
+
+kubectl get secrets $SECRET_NAME  -o=jsonpath='{.data.token}' -n devops-tools | base64
+
+Now click the Add button under credentials and create a credential type “Secret text“. Enter the service account token in the secret box and add other details. Finally, save the credential.
+
+
